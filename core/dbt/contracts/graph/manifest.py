@@ -436,6 +436,7 @@ class Manifest:
     macros: MutableMapping[str, ParsedMacro]
     docs: MutableMapping[str, ParsedDocumentation]
     exposures: MutableMapping[str, ParsedExposure]
+    selectors: MutableMapping[str, Any]
     disabled: List[CompileResultNode]
     files: MutableMapping[str, SourceFile]
     metadata: ManifestMetadata = field(default_factory=ManifestMetadata)
@@ -461,6 +462,7 @@ class Manifest:
             macros=macros,
             docs={},
             exposures={},
+            selectors={},
             disabled=[],
             files=files,
         )
@@ -730,8 +732,9 @@ class Manifest:
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
             exposures={k: _deepcopy(v) for k, v in self.exposures.items()},
-            disabled=[_deepcopy(n) for n in self.disabled],
+            selectors=self.root_project.manifest_selectors,
             metadata=self.metadata,
+            disabled=[_deepcopy(n) for n in self.disabled],
             files={k: _deepcopy(v) for k, v in self.files.items()},
         )
 
@@ -749,6 +752,7 @@ class Manifest:
             macros=self.macros,
             docs=self.docs,
             exposures=self.exposures,
+            selectors=self.selectors,
             metadata=self.metadata,
             disabled=self.disabled,
             child_map=forward_edges,
@@ -905,7 +909,13 @@ class Manifest:
             f'Merged {len(merged)} items from state (sample: {sample})'
         )
 
-    # provide support for copy.deepcopy() - we jsut need to avoid the lock!
+    # Provide support for copy.deepcopy() - we just need to avoid the lock!
+    # pickle and deepcopy use this. It returns a callable object used to
+    # create the initial version of the object and a tuple of arguments
+    # for the object, i.e. the Manifest.
+    # The order of the arguments must match the order of the attributes
+    # in the Manifest class declaration, because they are used as
+    # positional arguments to construct a Manifest.
     def __reduce_ex__(self, protocol):
         args = (
             self.nodes,
@@ -913,6 +923,7 @@ class Manifest:
             self.macros,
             self.docs,
             self.exposures,
+            self.selectors,
             self.disabled,
             self.files,
             self.metadata,
@@ -950,6 +961,11 @@ class WritableManifest(ArtifactMixin):
     exposures: Mapping[UniqueID, ParsedExposure] = field(
         metadata=dict(description=(
             'The exposures defined in the dbt project and its dependencies'
+        ))
+    )
+    selectors: Mapping[UniqueID, Any] = field(
+        metadata=dict(description=(
+            'The selectors defined in selectors.yml'
         ))
     )
     disabled: Optional[List[CompileResultNode]] = field(metadata=dict(
