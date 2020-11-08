@@ -381,8 +381,10 @@ class Compiler:
             compiled_node, manifest, extra_context
         )
 
+        processed = self.pre_process_dbt_comments(node.raw_sql)
+
         compiled_node.compiled_sql = jinja.get_rendered(
-            node.raw_sql,
+            processed,
             context,
             node,
         )
@@ -394,6 +396,13 @@ class Compiler:
         )
 
         return injected_node
+
+    def pre_process_dbt_comments(self, raw_sql: str) -> str:
+        import re
+        DBT_TABLE_ALIAS = re.compile(r"""(?P<table>[\w\.]+)\s+/\*dbt\s((?<=/\*dbt\s)(?:.)*?(?=\*/))\*/\s+(?P<alias>[\w_]+)?""")
+        raw_sql = DBT_TABLE_ALIAS.sub('\\2 \\3', raw_sql)
+        DBT_MULTI_LINE_BLOCK = re.compile(r"""/\*dbt\s((?<=/\*dbt\s)(.|\n)*?(?=\*/))\*/""")
+        return DBT_MULTI_LINE_BLOCK.sub('\\1', raw_sql)
 
     def write_graph_file(self, linker: Linker, manifest: Manifest):
         filename = graph_file_name
